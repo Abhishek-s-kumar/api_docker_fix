@@ -1,0 +1,76 @@
+# WRD API — Development Docker Compose (hot-reload, single replica, ports exposed)
+# Usage: make up-dev
+version: '3.8'
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: wrd-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wazuh_api
+      POSTGRES_USER: api
+      POSTGRES_PASSWORD: devpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - wrd-dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api -d wazuh_api"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+
+  wazuh-api:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    container_name: wrd-api-dev
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql+asyncpg://api:devpassword@postgres:5432/wazuh_api
+      - SECRET_KEY=dev-secret-key-not-for-production
+      - JWT_SECRET=dev-jwt-secret-not-for-production
+      - LOG_LEVEL=DEBUG
+      - DEBUG=true
+      - WORKERS=1
+      - GIT_REPO_PATH=/app/git-repo
+      - GIT_REMOTE_URL=${GIT_REMOTE_URL:-}
+    volumes:
+      # Hot-reload: mount source code
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./migrations:/app/migrations:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      - ./git-repo:/app/git-repo
+      - api_dev_data:/data
+    networks:
+      - wrd-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "python -m alembic upgrade head &&
+             python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  postgres_dev_data:
+  api_dev_data:
+
+networks:
+  wrd-dev:
+    driver: bridge

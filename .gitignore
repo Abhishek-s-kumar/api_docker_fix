@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+.venv/
+venv/
+env/
+.env
+!.env.example
+
+# Pytest
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# MyPy
+.mypy_cache/
+
+# Secrets (never commit)
+secrets/
+data/
+*.key
+*.pem
+*.crt
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Docker
+*.log
+
+# Git repo mount (runtime data)
+git-repo/.git/
+git-repo/rules/
+
+# Alembic
+migrations/versions/*.py
+!migrations/versions/__init__.py
+!migrations/versions/001_initial.py
+
+# Packages
+/tmp/
+rule-packages/

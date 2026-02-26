@@ -1,0 +1,117 @@
+# WRD API — Production Docker Compose (3 API replicas + NGINX + Redis + PostgreSQL)
+# Usage: make up-prod
+version: '3.8'
+
+services:
+
+  # ── PostgreSQL 15 ──────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: wrd-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wazuh_api
+      POSTGRES_USER: api
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    secrets:
+      - db_password
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api -d wazuh_api"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+
+  # ── API Server (scalable) ─────────────────────────────────
+  wazuh-api:
+    build:
+      context: ../../
+      dockerfile: deployments/docker/Dockerfile
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql+asyncpg://api@postgres:5432/wazuh_api
+      - SECRET_KEY_FILE=/run/secrets/secret_key
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - DB_PASSWORD_FILE=/run/secrets/db_password
+      - LOG_LEVEL=INFO
+      - WORKERS=4
+      - GIT_REPO_PATH=/app/git-repo
+    volumes:
+      - git_repo:/app/git-repo
+      - api_data:/data
+    secrets:
+      - secret_key
+      - jwt_secret
+      - db_password
+    networks:
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+
+  # ── NGINX Reverse Proxy ───────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: wrd-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_ssl:/etc/nginx/ssl:ro
+    networks:
+      - backend
+      - frontend
+    depends_on:
+      - wazuh-api
+
+# ── Secrets ────────────────────────────────────────────────
+secrets:
+  secret_key:
+    file: ../../secrets/secret_key.txt
+  jwt_secret:
+    file: ../../secrets/jwt_secret.txt
+  db_password:
+    file: ../../secrets/db_password.txt
+
+# ── Volumes ────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  git_repo:
+    driver: local
+  api_data:
+    driver: local
+  nginx_ssl:
+    driver: local
+
+# ── Networks ───────────────────────────────────────────────
+networks:
+  backend:
+    driver: bridge
+    internal: true   # No direct internet access from backend
+  frontend:
+    driver: bridge
