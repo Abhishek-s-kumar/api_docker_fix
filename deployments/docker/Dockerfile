@@ -1,24 +1,25 @@
 # ─────────────────────────────────────────────
-# Stage 1: Build dependencies
+# Stage 1: Build stage
 # ─────────────────────────────────────────────
 FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
-# Install build tools
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    libpq-dev \
-    git \
+    build-essential \
     curl \
+    git \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY pyproject.toml .
-COPY README.md .
+# Install Python build tools
+COPY pyproject.toml README.md ./
+COPY src/ ./src/
+
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir hatchling && \
-    pip install --no-cache-dir ".[dev]" --target /deps
+    pip install --no-cache-dir "bcrypt==3.2.0" "."
 
 # ─────────────────────────────────────────────
 # Stage 2: Production image
@@ -29,20 +30,26 @@ LABEL org.opencontainers.image.title="WRD API"
 LABEL org.opencontainers.image.version="2.0.0"
 LABEL org.opencontainers.image.description="Wazuh Rules Distribution API"
 
-# Runtime dependencies only
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    git \
     curl \
+    git \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Non-root user
-RUN groupadd -r wrdapi && useradd -r -g wrdapi -d /app wrdapi
-
+# Set up application directory
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /deps /usr/local/lib/python3.11/site-packages
+# Copy dependencies from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Patch passlib to avoid bcrypt version check error using sed - use | as delimiter
+# We target the specific line in bcrypt.py
+RUN sed -i 's|_bcrypt\.__about__\.__version__|getattr(_bcrypt, "__version__", "3.2.0")|g' /usr/local/lib/python3.11/site-packages/passlib/handlers/bcrypt.py
+
+# Create non-root user
+RUN groupadd -r wrdapi && useradd -r -g wrdapi wrdapi
 
 # Copy application source
 COPY src/ /app/src/
@@ -64,13 +71,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Default: Gunicorn with Uvicorn workers
-CMD ["python", "-m", "gunicorn", \
-     "src.main:app", \
+ENTRYPOINT ["gunicorn", "src.main:app", \
      "--worker-class", "uvicorn.workers.UvicornWorker", \
      "--workers", "4", \
      "--bind", "0.0.0.0:8000", \
      "--timeout", "120", \
      "--keep-alive", "5", \
      "--access-logfile", "-", \
-     "--error-logfile", "-", \
-     "--log-level", "info"]
+     "--error-logfile", "-"]
