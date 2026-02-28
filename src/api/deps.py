@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config import get_settings
 from src.core.security import verify_api_key
-from src.db.base import APIKey
+from src.db.base import APIKey, ClusterNode
 from src.db.session import AsyncSessionLocal
 
 settings = get_settings()
@@ -108,3 +108,34 @@ DBSession = Annotated[AsyncSession, Depends(get_db)]
 AuthKey = Annotated[APIKey, Depends(require_api_key)]
 AdminKey = Annotated[APIKey, Depends(require_admin)]
 WriterKey = Annotated[APIKey, Depends(require_writer)]
+
+async def require_node_key(
+    authorization: Annotated[Optional[str], Header()] = None,
+    db: AsyncSession = Depends(get_db),
+) -> ClusterNode:
+    token = _extract_bearer_token(authorization)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    result = await db.execute(select(ClusterNode).where(ClusterNode.is_active == True))
+    nodes = result.scalars().all()
+    matched_node = None
+    for n in nodes:
+        try:
+            if verify_api_key(token, n.api_key_hash):
+                matched_node = n
+                break
+        except Exception:
+            continue
+    if not matched_node:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return matched_node
+
+NodeAuthKey = Annotated[ClusterNode, Depends(require_node_key)]

@@ -83,6 +83,50 @@ async def _create_admin_key(name: str = "admin") -> str:
     return raw_key
 
 
+
+async def _seed_default_cluster():
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from src.config import get_settings
+    from src.db.base import Cluster, ClusterNode
+    from src.core.security import generate_node_key, hash_api_key
+    from sqlalchemy import select
+
+    settings = get_settings()
+
+    engine = create_async_engine(settings.database_url, echo=False)
+    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with async_session() as session:
+        result = await session.execute(select(Cluster).where(Cluster.name == 'multi-node-cluster'))
+        cluster = result.scalar_one_or_none()
+        if not cluster:
+            cluster = Cluster(name='multi-node-cluster', topology_type='master-worker')
+            session.add(cluster)
+            await session.flush()
+            
+        result = await session.execute(select(ClusterNode).where(ClusterNode.node_id == 'worker-01'))
+        existing_node = result.scalar_one_or_none()
+        raw_key = 'node_multi-node-cluster_worker-01_WnK8SkRu8gkPPenyqPNf9j2s2uPlRood'
+        
+        if not existing_node:
+            console.print('[blue]→[/blue] Seeding worker-01...')
+            node = ClusterNode(
+                cluster_id=cluster.id,
+                node_id='worker-01',
+                node_type='worker',
+                api_key_hash=hash_api_key(raw_key),
+                sync_status='pending'
+            )
+            session.add(node)
+            await session.commit()
+            console.print(f'[green]✓[/green] Worker-01 API Key generated: [bold green]{raw_key}[/bold green]')
+        else:
+            existing_node.api_key_hash = hash_api_key(raw_key)
+            await session.commit()
+            console.print('[green]✓[/green] Worker-01 node key synced.')
+    await engine.dispose()
+
+
 def main():
     parser = argparse.ArgumentParser(description="WRD API Initialization")
     parser.add_argument("--create-admin", action="store_true", help="Create admin API key")
@@ -113,6 +157,7 @@ def main():
 
             console.print(f"[blue]→[/blue] Creating admin key '{args.admin_name}'...")
             raw_key = await _create_admin_key(args.admin_name)
+            await _seed_default_cluster()
 
             table = Table(title="Admin API Key", show_header=True)
             table.add_column("Field", style="cyan")

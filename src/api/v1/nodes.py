@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
 
-from src.api.deps import AuthKey, DBSession
+from src.api.deps import AuthKey, DBSession, NodeAuthKey
 from src.models.node import NodeStatusReport, NodeStatusResponse
 from src.services.rule_service import RuleService
 from src.services.sync_service import SyncOrchestrator
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/nodes", tags=["Nodes"])
 async def get_node_rules(
     node_id: str,
     request: Request,
-    api_key: AuthKey,
+    api_key: NodeAuthKey,
     if_none_match: str | None = Header(default=None, alias="If-None-Match"),
 ) -> Response:
     """
@@ -73,7 +73,7 @@ async def report_node_status(
     node_id: str,
     body: NodeStatusReport,
     db: DBSession,
-    api_key: AuthKey,
+    api_key: NodeAuthKey,
 ) -> NodeStatusResponse:
     """
     Wazuh manager nodes call this endpoint to report the result of
@@ -123,7 +123,7 @@ async def report_node_status(
 async def deregister_node(
     node_id: str,
     db: DBSession,
-    api_key: AuthKey,
+    api_key: NodeAuthKey,
 ) -> Response:
     """Soft-delete a node from its cluster."""
     from sqlalchemy import select
