@@ -8,8 +8,8 @@
 
 | Role                  | Hostname                 | IP Address          | OS               | Details                                    |
 | --------------------- | ------------------------ | ------------------- | ---------------- | ------------------------------------------ |
-| **Developer / Admin** | `DESKTOP-XXXX` (Windows) | `10.21.235.X` (LAN) | Windows 11       | Your local machine running VS Code and SSH |
-| **Linux Server**      | `workshop`               | `10.21.235.82`      | Ubuntu 24.04 LTS | Hosts all Docker containers                |
+| **Developer / Admin** | `DESKTOP-XXXX`  | `10.21.235.X` (LAN) |         | Your local machine running SSH |
+| **Linux Server**      | `huvuvbu`               | `10.21.235.82`      | Ubuntu 24.04 LTS | Hosts all Docker containers                |
 
 ### Docker Containers on `workshop@10.21.235.82`
 
@@ -319,3 +319,4 @@ The worker will:
 | cron not running after redeploy            | `service cron start` not called                           | Verify `docker-entrypoint.sh` is copied and used as `ENTRYPOINT` |
 | Rules not updating                         | Syntax check failure due to bad `if_sid` references       | Check `wazuh-analysisd -t` output in `/var/log/wrd-sync.log`     |
 | sync log empty                             | cron daemon not started                                   | Run `service cron status` inside container                       |
+
