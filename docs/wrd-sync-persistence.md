@@ -73,8 +73,8 @@ These files are placed **next to** your Wazuh multi-node `docker-compose.yml`:
 From your **Windows machine**, open a terminal (PowerShell):
 
 ```bash
-ssh workshop@10.21.235.82
-# Password: Pas$@123
+ssh ucjdhfd@10.gewg.ger.gegw
+# Password: gregerg
 ```
 
 ---
@@ -319,4 +319,5 @@ The worker will:
 | cron not running after redeploy            | `service cron start` not called                           | Verify `docker-entrypoint.sh` is copied and used as `ENTRYPOINT` |
 | Rules not updating                         | Syntax check failure due to bad `if_sid` references       | Check `wazuh-analysisd -t` output in `/var/log/wrd-sync.log`     |
 | sync log empty                             | cron daemon not started                                   | Run `service cron status` inside container                       |
+
 
